@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summarizer + Chotu</title>
+<style>
+:root{--g:#2e7d32;--gl:#e8f5e9;--bg:#fafdf9;--t:#1b2a1b;--b:#cfe3cf}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,"Noto Sans",sans-serif;background:var(--bg);color:var(--t);padding-bottom:70px}
+header{background:var(--g);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+header h1{font-size:18px;margin:0}select,button,input,textarea{font:inherit}
+select,input[type=text],textarea{padding:9px;border:1px solid var(--b);border-radius:8px;background:#fff;width:100%}
+main{max-width:720px;margin:0 auto;padding:14px}.tab{display:none}.tab.on{display:block}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid var(--b)}
+nav button{flex:1;padding:14px;border:0;background:none;font-size:16px}nav button.on{color:var(--g);font-weight:700;border-top:3px solid var(--g)}
+.drop{border:2px dashed var(--g);border-radius:14px;padding:28px 12px;text-align:center;background:var(--gl);cursor:pointer}
+.row{display:flex;gap:8px;margin:10px 0}.row>*{flex:1}
+.btn{background:var(--g);color:#fff;border:0;border-radius:8px;padding:10px 14px;cursor:pointer}
+.btn.o{background:#fff;color:var(--g);border:1px solid var(--g)}.btn:disabled{opacity:.5}
+.card{background:#fff;border:1px solid var(--b);border-radius:12px;padding:14px;margin:12px 0;line-height:1.55}
+.tools{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.note{font-size:12px;color:#557}
+#chat{height:55vh;overflow:auto;background:#fff;border:1px solid var(--b);border-radius:12px;padding:10px}
+.m{max-width:85%;padding:9px 12px;border-radius:12px;margin:6px 0;white-space:pre-wrap}
+.m.u{background:var(--gl);margin-left:auto}.m.c{background:#f1f1f1}
+.chips{display:flex;gap:6px;overflow:auto;margin:8px 0}.chips button{white-space:nowrap;border:1px solid var(--g);background:#fff;border-radius:16px;padding:6px 12px;color:var(--g)}
+.err{color:#b00020;margin:8px 0}
+</style></head><body>
+<header><h1>🌾 Summarizer + Chotu</h1>
+<select id="lang" style="width:auto"><option value="English|en-IN">English</option><option value="Hindi|hi-IN">हिंदी</option><option value="Telugu|te-IN">తెలుగు</option><option value="Tamil|ta-IN">தமிழ்</option><option value="Kannada|kn-IN">ಕನ್ನಡ</option><option value="Malayalam|ml-IN">മലയാളം</option><option value="Marathi|mr-IN">मराठी</option><option value="Bengali|bn-IN">বাংলা</option></select></header>
+<main>
+<section id="t1" class="tab on">
+ <label class="drop" for="file"><div style="font-size:34px">📄</div><b id="fname">Tap to upload a file</b><div class="note">PDF, DOCX, TXT, image or scanned PDF · max 10 MB</div></label>
+ <input id="file" type="file" hidden accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.webp">
+ <div class="row"><select id="style"><option value="short">Short</option><option value="detailed">Detailed</option><option value="bullets">Bullet points</option><option value="key">Important points only</option></select>
+ <button class="btn" id="go">Summarize</button></div>
+ <div class="note">🔒 Your file is read in memory and not stored.</div>
+ <div id="err" class="err"></div>
+ <div id="res" hidden><div class="card" id="sum"></div>
+  <div class="tools"><button class="btn o" id="listen">🔊 Listen</button><button class="btn o" id="copy">📋 Copy</button><button class="btn" id="pdf">⬇ Download PDF</button></div>
+  <label class="note"><input type="checkbox" id="inclqa"> Include my questions &amp; answers in the PDF</label>
+  <div class="row"><input type="text" id="q" placeholder="Ask about this document…"><button class="btn" id="askb" style="flex:0 0 auto">Ask</button></div>
+  <div id="qa"></div></div>
+</section>
+<section id="t2" class="tab">
+ <div class="chips" id="chips"></div><div id="chat"></div>
+ <div class="row" style="align-items:center"><button class="btn o" id="mic" style="flex:0 0 auto">🎤</button><button class="btn o" id="cam" style="flex:0 0 auto">📷</button>
+ <input type="text" id="msg" placeholder="Ask Chotu anything…"><button class="btn" id="send" style="flex:0 0 auto">Send</button></div>
+ <input id="photo" type="file" accept="image/*" hidden>
+ <label class="note"><input type="checkbox" id="speak"> Read Chotu's replies aloud</label>
+ <div class="note" id="pnote"></div>
+ <div class="note">Chotu gives general guidance only. For serious health or animal problems, please see a doctor or vet.</div>
+</section></main>
+<nav><button class="on" data-t="t1">📄 Summarizer</button><button data-t="t2">🤖 Chotu</button></nav>
+<script>
+const $=id=>document.getElementById(id);let source="",summary="",qa=[],hist=[],photo=null,fileObj=null;
+const L=()=>{const [n,c]=$("lang").value.split("|");return{name:n,code:c}};
+const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+function md(s){let h=esc(s).replace(/^### (.*)$/gm,"<h4>$1</h4>").replace(/^## (.*)$/gm,"<h3>$1</h3>").replace(/^# (.*)$/gm,"<h2>$1</h2>").replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/^[-*] (.*)$/gm,"<li>$1</li>").replace(/(<li>.*<\/li>\n?)+/g,m=>"<ul>"+m+"</ul>");return h.replace(/\n(?!<)/g,"<br>")}
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button,.tab").forEach(x=>x.classList.remove("on"));b.classList.add("on");$(b.dataset.t).classList.add("on")});
+async function api(url,opt){const r=await fetch(url,opt);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.detail||"Something went wrong");return j}
+$("file").onchange=e=>{fileObj=e.target.files[0];$("fname").textContent=fileObj?fileObj.name:"Tap to upload a file"};
+$("go").onclick=async()=>{$("err").textContent="";if(!fileObj)return $("err").textContent="Please choose a file first.";
+ if(fileObj.size>10*1048576)return $("err").textContent="File is larger than 10 MB.";
+ $("go").disabled=true;$("go").textContent="Reading…";const f=new FormData();f.append("file",fileObj);f.append("language",L().name);f.append("style",$("style").value);
+ try{const j=await api("/api/summarize",{method:"POST",body:f});summary=j.summary;source=j.source;qa=[];$("qa").innerHTML="";$("sum").innerHTML=md(summary);$("res").hidden=false}
+ catch(e){$("err").textContent=e.message}$("go").disabled=false;$("go").textContent="Summarize"};
+$("askb").onclick=async()=>{const q=$("q").value.trim();if(!q)return;$("askb").disabled=true;
+ try{const j=await api("/api/ask",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({source,question:q,language:L().name})});qa.push([q,j.answer]);
+ $("qa").innerHTML+=`<div class="card"><b>Q: ${esc(q)}</b><br>${md(j.answer)}</div>`;$("q").value=""}catch(e){$("err").textContent=e.message}$("askb").disabled=false};
+function say(t){if(!window.speechSynthesis)return;speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t.replace(/[*#]/g,""));u.lang=L().code;speechSynthesis.speak(u)}
+$("listen").onclick=()=>say(summary);
+$("copy").onclick=()=>navigator.clipboard.writeText(summary).then(()=>{$("copy").textContent="✅ Copied";setTimeout(()=>$("copy").textContent="📋 Copy",1500)});
+$("pdf").onclick=()=>{const w=window.open("","_blank");if(!w)return alert("Please allow pop-ups to download the PDF.");
+ let body=md(summary);if($("inclqa").checked&&qa.length)body+="<h3>Questions &amp; answers</h3>"+qa.map(x=>`<p><b>Q: ${esc(x[0])}</b><br>${md(x[1])}</p>`).join("");
+ w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(fileObj?fileObj.name:"Summary")}</title><style>body{font-family:"Noto Sans",system-ui,sans-serif;max-width:720px;margin:30px auto;line-height:1.6;color:#111}h1{color:#2e7d32;font-size:22px}.meta{color:#555;font-size:13px;border-bottom:1px solid #ccc;padding-bottom:8px;margin-bottom:16px}.foot{margin-top:30px;font-size:11px;color:#666;border-top:1px solid #ccc;padding-top:8px}</style></head><body><h1>Summary: ${esc(fileObj?fileObj.name:"Document")}</h1><div class="meta">Language: ${L().name} · Created: ${new Date().toLocaleDateString()}</div>${body}<div class="foot">Made by an AI summarizer. Please check the original document for important decisions.</div><script>setTimeout(()=>print(),400)<\/script></body></html>`);w.document.close()};
+// ---- Chotu ----
+["🌱 Farming","🐔 Poultry","🐑 Sheep & goats","🐄 Cattle","❤️ Health","💡 Life hacks","🧭 Guidance"].forEach(t=>{const b=document.createElement("button");b.textContent=t;b.onclick=()=>{$("msg").value="Help me with: "+t.slice(2);$("msg").focus()};$("chips").appendChild(b)});
+function add(c,t){const d=document.createElement("div");d.className="m "+c;d.textContent=t;$("chat").appendChild(d);$("chat").scrollTop=1e9;return d}
+add("c","Namaste! I'm Chotu 🙂 Ask me about farming, animals, health or daily life. You can type, speak 🎤 or send a photo 📷.");
+$("cam").onclick=()=>$("photo").click();
+$("photo").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{photo={b64:r.result.split(",")[1],type:f.type||"image/jpeg"};$("pnote").textContent="📷 Photo attached: "+f.name};r.readAsDataURL(f)};
+async function send(){const t=$("msg").value.trim();if(!t&&!photo)return;add("u",(photo?"📷 ":"")+t);hist.push({role:"user",content:t||"Please look at this photo."});$("msg").value="";
+ const th=add("c","Chotu is thinking…");$("send").disabled=true;
+ try{const j=await api("/api/chotu",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:hist,image_b64:photo&&photo.b64,media_type:photo&&photo.type})});
+ th.textContent=j.reply;hist.push({role:"assistant",content:j.reply});if($("speak").checked)say(j.reply)}catch(e){th.textContent="Sorry, "+e.message;hist.pop()}
+ photo=null;$("pnote").textContent="";$("send").disabled=false}
+$("send").onclick=send;$("msg").onkeydown=e=>{if(e.key==="Enter")send()};
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+$("mic").onclick=()=>{if(!SR)return alert("Voice input is not supported in this browser. Try Chrome.");const r=new SR();r.lang=L().code;r.onresult=e=>{$("msg").value=e.results[0][0].transcript;send()};r.start();$("mic").textContent="🔴";r.onend=()=>$("mic").textContent="🎤"};
+</script></body></html>
